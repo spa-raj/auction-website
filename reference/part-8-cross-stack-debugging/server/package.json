@@ -13,18 +13,18 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.211.0",
-    "@opentelemetry/instrumentation-pg": "^0.63.0",
+    "@opentelemetry/instrumentation-pg": "^0.78.0",
     "@opentelemetry/instrumentation-undici": "^0.21.0",
-    "@opentelemetry/sdk-node": "^0.208.0",
+    "@opentelemetry/sdk-node": "^0.217.0",
     "@opentelemetry/sdk-trace-base": "^2.2.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@socket.io/redis-emitter": "^5.1.0",
     "amqplib": "^2.0.1",
-    "fastify": "^5.6.2",
+    "fastify": "^5.12.6",
     "pg": "^8.16.3",
     "redis": "^6.2.1",
     "socket.io": "^4.8.3",
-    "zod": "^4.1.12"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.8",
@@ -33,6 +33,6 @@
     "socket.io-client": "^4.8.3",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.15"
+    "vitest": "^4.1.11"
   }
 }
