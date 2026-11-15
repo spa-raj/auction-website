@@ -9,11 +9,13 @@ Open <http://localhost:5102> (Fastify API: <http://localhost:3102>, health page:
 
 `npm start` ensures the shared PostgreSQL service in `../docker-compose.yml` and the isolated `auction_part_2` database on port 55432 are ready, applies pending SQL migrations, and starts both apps. Normal startup preserves listings, bid histories and closing times. Part 1 is unchanged.
 
-## Slice 1
+## Slice 1 — Browsing and users
 
 Browse, search, filter and sort the six persisted seed auctions. Each fresh tab randomly selects one of ten demo users and remembers that selection in sessionStorage under `auction-part-2-active-user`. The header shows the active user’s name. The footer switcher changes the selection for that tab, preserving it through navigation and reloads. These identities are not authenticated.
 
-Use **Sell** to open `/auctions/new`, enter the required fields and publish immediately as the selected user. A successful post opens `/items/:slug`. Category illustrations are automatic. Seeded listings preserve specifications; new listings hide that section. Details show persisted bid history and ended status. Bid submission ships in Slice 2 and is currently unavailable.
+## Slice 2 — Posting
+
+Use **Sell** to open `/auctions/new`, enter the required fields and publish immediately as the selected user. The form shows field-level validation and preserves entered values after a request failure. A successful post opens `/items/:slug`. Category illustrations are automatic. Seeded listings preserve specifications; new listings hide that section. Details show persisted bid history and ended status. Bid submission ships in Slice 3 and is currently unavailable.
 
 Starting prices are USD with at most two decimal places ($0.01–$1,000,000), stored as integer cents. Closing time is entered in your local timezone, sent and stored as UTC, and displayed in the viewer's local timezone. The API enforces the deadline being in the future at insertion.
 

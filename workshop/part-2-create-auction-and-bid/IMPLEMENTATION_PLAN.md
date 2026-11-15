@@ -1,45 +1,42 @@
 # Implementation Slices
 
-Status: slice definitions approved. Slice 1 implemented and verified; Slice 2 awaits user confirmation after review. Behavior is defined in [GRILL.md](GRILL.md). Results are in [VERIFICATION.md](VERIFICATION.md).
+Status: Slice 1 accepted. Slice 2 (posting) implemented and verified, ready for review. Stop for review before Slice 3 (bidding). This numbering follows the user's latest instruction and supersedes the earlier two-slice plan that grouped posting with browsing. Behavior is defined in [GRILL.md](GRILL.md).
 
-## Slice 1 — Post and browse persisted auctions (ready for review)
+## Slice 1 — Browse persisted auctions and select a demo user (accepted)
 
-Visible outcome: select a demo user, browse the six seeded auctions, post a new auction, and open its persisted detail page.
+Visible outcome: browse the six seeded auctions through the PostgreSQL-backed catalog and details, search/filter/sort, and inspect seeded bid histories, specifications and ended status. Each new tab starts as a random demo user, with tab-local persistence, a footer switcher and the active name in the header.
 
-Copy the foundation into Part 2 without generated dependencies or historical logs. Configure the isolated `auction_part_2` database and proposed ports API 3102/web 5102. Keep the shared root Compose file and Part 1 unchanged. Preserve the existing UI conventions and health page.
+The foundation, explicit migrations, ten seeded users, seed/reset behavior, health page, commands and initial checks are complete. Normal startup preserves changes. Explicit reset restores Part 2 data only. Keep Part 1 and the shared Compose configuration unchanged.
 
-Deliver the schema, explicit migrations, ten demo users, consistent seed auctions and bid histories, normal-startup preservation, and explicit Part 2 seed reset. Connect the catalog and detail views to PostgreSQL through Fastify. Include search, category filtering, sorting, a random initial user per tab, footer selection persisted in sessionStorage, the active user’s name in the top-right header, and `/auctions/new` with boundary validation and post-success navigation. Preserve seeded specifications and hide the section for new listings without specifications.
+Browser checkpoint: browse the catalog and a seed detail, change filters and sorting, then check user selection across reload/navigation and independent tabs.
 
-Render seeded bid history, current amount, and ended status accurately. Until bid submission ships in Slice 2, show bidding as unavailable rather than expose an inert form. Posting, browsing, and persistence must be fully functional at this checkpoint.
+## Slice 2 — Post an auction (current review checkpoint)
 
-Browser checkpoint:
+Visible outcome: Sell opens `/auctions/new`; completing and submitting the form publishes immediately under the active user, opens its persisted detail page, and makes it discoverable in the catalog.
 
-1. Open `http://localhost:5102`; browse the six seeded auctions, search, filter, and change sort order.
-2. Change the footer user; reload and confirm the selection is remembered.
-3. Choose Sell; submit missing/invalid values and confirm useful validation. Then create a valid auction with a future local closing time.
-4. Confirm navigation to its detail page, selected seller, category illustration, correct USD price and deadline, and hidden empty specifications.
-5. Reload and restart normally; confirm the auction persists. Run the explicit reset and reload; confirm the six seed auctions and ten users are restored and the posted auction is removed.
+Required fields: title, category, description, condition, location, starting price and future local closing time. Validate on both client and API, trim text, use integer USD cents and store UTC closing instants. Derive ownership from the selected demo user rather than accepting a seller in the body. Show category illustrations; no uploads. New listings have no required specifications, so hide that section when empty.
 
-Verification: run `npm test`, strict TypeScript checks, real-PostgreSQL migration/seed/persistence/reset and API validation tests, and browser checks for the health page, catalog, user selection, and posting flow. Establish Part 2's commands and required checks in its AGENTS.md and README as part of this slice.
+Show accessible field-level validation, focus the first invalid field, prevent duplicate in-flight submissions, and preserve input on request failure. These support a complete posting flow; do not add bid submission.
 
-Stop for review and confirmation before Slice 2.
+Browser checkpoints:
 
-## Slice 2 — Bid and inspect the outcome
+1. Select a user in the footer. Follow Sell to `/auctions/new` and confirm the displayed seller matches the header.
+2. Submit an empty form; inspect required-field feedback and keyboard focus. Try a whitespace-only title, an invalid price and a past closing time.
+3. Fill valid values, switch the footer user before publishing, and confirm posting attributes the auction to that selected user.
+4. Publish and inspect the new detail's title, illustration, seller, integer-cent USD price, local deadline and no empty specifications section.
+5. Reload the detail and find the listing in the catalog. Verify local-time entry corresponds to the stored UTC instant.
+6. Simulate a failed request during verification; confirm draft values survive, then retry successfully. Check narrow mobile layout and `/health`.
 
-Visible outcome: another demo user can bid on a posted auction, see accepted bids and history persist, and receive clear rejection messages for disallowed bids.
+Required checks: `npm test`, `npm run build` (strict TypeScript and production Vite build), real-PostgreSQL posting/validation/ownership tests, and browser checks above. Preserve user-created data; no reset is needed for this checkpoint. Temporary screenshots/scripts belong outside the repository.
 
-Add the direct-bid API and form. Validate identity references and integer-cent amounts; enforce the $1 minimum increase, no seller self-bids, and the deadline in the API. Allow repeat bids by the current leader. Persist accepted bids and display bidder, amount, and time newest first. Refresh details every five seconds and after submission; preserve useful input on errors, update outdated prices and minimums, and never automatically retry a rejected bid.
+Stop after complete verification and clear review instructions. Wait for confirmation before Slice 3.
 
-Complete the deadline experience: disable bidding at expiry, reject late requests in the API, and show the winner or “No bids.” Deadline behavior is determined from server time, without a close worker. No payment, notification, editing, cancellation, withdrawal, or concurrent-bid guarantee is included.
+## Slice 3 — Bid and inspect the outcome (not started)
 
-Browser checkpoint:
+Visible outcome: another demo user bids on a posted auction and sees persisted history, updates and closing outcomes.
 
-1. Create a $100 auction as one user and switch to another. Confirm the minimum first bid is $101; submit $101 and inspect the updated amount and history.
-2. Reload and confirm persistence. Submit an equal or insufficient bid and confirm rejection; submit a valid increase as the current leader.
-3. Switch back to the seller and confirm self-bidding is unavailable. Verify the API also rejects a seller's direct request.
-4. Use two separate browser sessions with different selected users. Bid sequentially and confirm the other session updates within five seconds. With a stale amount, confirm a clear rejection and refreshed minimum, without automatic resubmission.
-5. Post short-duration auctions with and without bids. Observe expiry, disabled bidding, and the winner or “No bids”; verify the API rejects late requests. Search and filter to find the ended auctions.
+Add direct bidding with the $1 minimum increase, no self-bids and server-enforced deadline. Allow the leader to bid again. Show history newest first. Refresh details every five seconds and after a bid, explain stale-price rejections, and never automatically resubmit. Disable bidding at expiry and show the winner or “No bids.” No payments, notifications, editing, cancellation or withdrawal. Concurrent-bid protection remains deferred to Part 3.
 
-Verification: run all required tests and strict TypeScript checks, real-PostgreSQL tests for valid/invalid sequential bids, self-bids, missing/invalid identities, bid history ordering, and deadline boundaries. Verify posting-to-bidding and ended-auction behavior in the browser. Concurrent-write correctness tests belong to Part 3.
+Browser checkpoints: bid as a non-seller, test minimum and self-bid rejection, reload to confirm history persistence, use separate browser windows for sequential bidding/refresh, and inspect ended auctions with and without bids.
 
-Stop for review; report changes, checks, and browser steps. If a browser demonstration is requested, use headed Chrome/Edge, separate tiled windows, and leave them open. Any requested captures go to a separate temporary directory.
+Run relevant PostgreSQL tests and browser checks. If a browser demonstration is requested, use headed Chrome/Edge with separate tiled windows and leave them open.

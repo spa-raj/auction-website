@@ -4,14 +4,23 @@ export const categories = ['GPUs', 'CPUs', 'Memory', 'Chassis', 'Networking', 'C
 export const conditions = ['New', 'Open box', 'Used', 'Refurbished'] as const;
 export const userSchema = z.object({ id: z.number().int().positive(), name: z.string() });
 export type DemoUser = z.infer<typeof userSchema>;
+export const maximumStartingPriceCents = 100_000_000;
+export const maximumStartingPriceMessage = 'The starting price must be at most $1,000,000.';
+export const minimumStartingPriceMessage = 'The starting price must be at least $0.01.';
+export const invalidClosingTimeMessage = 'Enter a valid closing date and time.';
+export const futureClosingTimeMessage = 'Choose a future closing date and time.';
+
 export const createAuctionSchema = z.object({
-  title: z.string().trim().min(1).max(120),
+  title: z.string().trim().min(1, 'Enter a title.').max(120, 'Use at most 120 characters for the title.'),
   category: z.enum(categories),
-  description: z.string().trim().min(1).max(5000),
+  description: z.string().trim().min(1, 'Enter a description.').max(5000, 'Use at most 5,000 characters for the description.'),
   condition: z.enum(conditions),
-  location: z.string().trim().min(1).max(120),
-  startingPriceCents: z.number().int().min(1).max(100_000_000),
-  closesAt: z.iso.datetime().refine(value => Number.isFinite(Date.parse(value)) && Date.parse(value) > Date.now(), 'Choose a future closing time.'),
+  location: z.string().trim().min(1, 'Enter a location.').max(120, 'Use at most 120 characters for the location.'),
+  startingPriceCents: z.number({ error: 'Enter a valid USD amount.' })
+    .min(1, minimumStartingPriceMessage).max(maximumStartingPriceCents, maximumStartingPriceMessage)
+    .refine(Number.isInteger, 'The starting price must use whole cents.'),
+  closesAt: z.iso.datetime({ error: invalidClosingTimeMessage })
+    .pipe(z.string().refine(value => Date.parse(value) > Date.now(), futureClosingTimeMessage)),
 });
 export const bidSchema = z.object({ id: z.number().int(), bidder: userSchema, amountCents: z.number().int(), createdAt: z.iso.datetime() });
 export const auctionSchema = z.object({

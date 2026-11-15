@@ -8,4 +8,4 @@
 - Demo user selection is not authentication. Never describe Part 2 as safe for concurrent bidding.
 - Required checks: `npm test`, `npm run build` (includes strict TypeScript checks), and browser verification of `/health` plus the affected user flows.
 - Stable commands: `npm install`, `npm run db:up`, `npm run db:down`, `npm run db:reset`, `npm run migrate`, `npm run dev`, `npm start`, `npm test`.
-- Slice 1 is implemented and verified. Stop for user review; do not implement Slice 2 until the user confirms.
+- Slice 1 (browsing/users) is accepted. Slice 2 (posting) is implemented and verified. Stop for user review; do not start Slice 3 (bidding) until the user confirms.
