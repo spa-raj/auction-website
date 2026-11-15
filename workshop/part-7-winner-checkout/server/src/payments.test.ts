@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHmac, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
+import Fastify from 'fastify';
 import { buildApp } from './app.js';
 import { buildStripeApp } from '../../stripe-service/src/app.js';
 import { closeDueAuctions } from './close-auctions.js';
@@ -13,8 +14,20 @@ url.searchParams.set('options', `-c search_path=${schema}`);
 const pool = new pg.Pool({ connectionString: url.href });
 const secret = 'payment_test_secret';
 let app: ReturnType<typeof buildApp>;
-const mock = buildStripeApp({ logger: false, baseUrl: 'http://mock.test', webhookSecret: secret,
-  retryMs: 60_000, deliverWebhook: async (body, signature) => (await webhook(body, signature)).statusCode === 200 });
+let allowDelivery = true;
+let mockAddress = '';
+const deliveries: string[] = [];
+const makeMock = () => buildStripeApp({ logger: false, baseUrl: 'http://mock.test', webhookSecret: secret,
+  retryMs: 60_000, deliverWebhook: async (body, signature) => {
+    deliveries.push(body);
+    return allowDelivery && (await webhook(body, signature)).statusCode === 200;
+  } });
+let mock = makeMock();
+async function restartEmptyMock() {
+  await mock.close();
+  mock = makeMock();
+  await mock.listen({ port: Number(new URL(mockAddress).port), host: '127.0.0.1' });
+}
 beforeAll(async () => {
   await admin.query(`CREATE SCHEMA ${schema}`);
   for (const file of ['001_auctions.sql', '002_auction_outcomes.sql', '003_recipient_notifications.sql', '004_purchases.sql']) {
@@ -22,6 +35,7 @@ beforeAll(async () => {
   }
   await pool.query('TRUNCATE auctions CASCADE');
   const address = await mock.listen({ port: 0, host: '127.0.0.1' });
+  mockAddress = address;
   app = buildApp({ databaseUrl: url.href, payments: { stripeUrl: address, stripePublicUrl: 'http://mock.test', webUrl: 'http://market.test', webhookSecret: secret } });
 });
 afterAll(async () => { await app?.close(); await mock.close(); await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end(); });
@@ -83,7 +97,7 @@ describe('winner checkout and signed purchase completion', () => {
     expect(responses.every(r => r.statusCode === 200)).toBe(true);
     expect(new Set(responses.map(r => r.json().url)).size).toBe(1);
     expect((await pool.query('SELECT * FROM purchases WHERE auction_slug=$1', [slug])).rowCount).toBe(1);
-    const restarted = buildApp({ databaseUrl: url.href });
+    const restarted = buildApp({ databaseUrl: url.href, payments: { stripeUrl: mockAddress, stripePublicUrl: 'http://mock.test', webhookSecret: secret } });
     try { expect((await restarted.inject({ url: `/api/auctions/${slug}/purchase`, headers: { 'x-demo-user-id': '2' } })).json()).toEqual((await status(slug)).json()); }
     finally { await restarted.close(); }
   });
@@ -136,4 +150,94 @@ describe('winner checkout and signed purchase completion', () => {
     expect((await status(slug)).json().purchase.status).toBe('paid');
     expect((await status(slug, '1')).json().purchase.status).toBe('paid');
   });
+  it('projects seller-only summaries and keeps all payment data off public routes', async () => {
+    const slug = await fixture(); await session(slug);
+    const seller = await status(slug, '1');
+    expect(seller.headers['cache-control']).toBe('private, no-store');
+    expect(seller.json()).toEqual({ role: 'seller', recovery: 'none', purchase: { auctionSlug: slug, amountCents: 12345, currency: 'usd', status: 'unpaid', paidAt: null } });
+    const winner = await status(slug);
+    expect(winner.json()).toMatchObject({ role: 'winner', purchase: { id: expect.any(String) } });
+    for (const user of ['3', '4', '10']) {
+      const forbidden = await status(slug, user);
+      expect(forbidden.statusCode).toBe(403);
+      expect(forbidden.body).not.toContain('amountCents');
+      expect((await checkout(slug, user)).statusCode).toBe(403);
+    }
+    const publicDetail = (await app.inject(`/api/auctions/${slug}`)).json();
+    expect(publicDetail).not.toHaveProperty('purchase');
+    expect(publicDetail.auction).not.toHaveProperty('purchase');
+    expect(JSON.stringify(publicDetail)).not.toMatch(/sessionId|sessionUrl|paidAt|recovery|payment_status/);
+  });
+  it('recovers a disappeared unpaid session without changing the purchase or winning amount', async () => {
+    const slug = await fixture(); const original = await session(slug);
+    await restartEmptyMock(); // Simulates loss of an explicitly unpaid mock session.
+    expect((await status(slug)).json()).toMatchObject({ recovery: 'checkout_missing', purchase: { id: original.purchase.id, status: 'unpaid' } });
+    const seller = (await status(slug, '1')).json();
+    expect(seller.recovery).toBe('checkout_missing');
+    expect(seller.purchase).not.toHaveProperty('id');
+    expect((await checkout(slug, '1')).statusCode).toBe(403);
+    const attempts = await Promise.all(Array.from({ length: 5 }, () => checkout(slug)));
+    expect(attempts.every(r => r.statusCode === 200)).toBe(true);
+    expect(new Set(attempts.map(r => r.json().url)).size).toBe(1);
+    const replacement = await session(slug);
+    expect(replacement.id).not.toBe(original.id);
+    expect(replacement.purchase).toEqual(original.purchase);
+    // Retired-session completions cannot mark the replacement purchase paid.
+    expect((await webhook(JSON.stringify(event(original.id, original.purchase)))).statusCode).toBe(409);
+    expect((await status(slug)).json().purchase.status).toBe('unpaid');
+    expect((await attempt(replacement.id, '4242424242424242')).statusCode).toBe(200);
+    expect((await status(slug, '1')).json()).toMatchObject({ recovery: 'none', purchase: { status: 'paid' } });
+  });
+  it('never replaces a session during an outage and recovers after a definite 404', async () => {
+    const slug = await fixture(); const original = await session(slug);
+    await mock.close();
+    expect((await status(slug)).json()).toMatchObject({ recovery: 'service_unavailable', purchase: { status: 'unpaid' } });
+    expect((await checkout(slug)).statusCode).toBe(503);
+    expect((await pool.query('SELECT session_id FROM purchases WHERE auction_slug=$1', [slug])).rows[0].session_id).toBe(original.id);
+    mock = makeMock(); await mock.listen({ port: Number(new URL(mockAddress).port), host: '127.0.0.1' });
+    const replacement = await session(slug);
+    expect(replacement.id).not.toBe(original.id);
+  });
+  it('shows pending confirmation to seller/winner and never opens another payment', async () => {
+    const slug = await fixture(); const original = await session(slug);
+    allowDelivery = false;
+    try {
+      expect((await attempt(original.id, '4242424242424242')).statusCode).toBe(502);
+      for (const user of ['1', '2']) expect((await status(slug, user)).json()).toMatchObject({ recovery: 'confirmation_pending', purchase: { status: 'unpaid', paidAt: null } });
+      expect((await checkout(slug)).json()).toEqual({ status: 'confirmation_pending' });
+      expect((await pool.query('SELECT session_id FROM purchases WHERE auction_slug=$1', [slug])).rows[0].session_id).toBe(original.id);
+      const completion = deliveries.at(-1)!;
+      allowDelivery = true;
+      expect((await attempt(original.id, '4242424242424242')).statusCode).toBe(200);
+      expect(deliveries.at(-1)).toBe(completion);
+      expect((await status(slug, '1')).json()).toMatchObject({ recovery: 'none', purchase: { status: 'paid' } });
+      const paidAt = (await status(slug)).json().purchase.paidAt;
+      await restartEmptyMock();
+      expect((await checkout(slug)).json()).toEqual({ status: 'paid' });
+      expect((await status(slug)).json()).toMatchObject({ recovery: 'none', purchase: { status: 'paid', paidAt } });
+    } finally { allowDelivery = true; }
+  });
+  it.each(['server_error', 'mismatch', 'malformed', 'inconsistent', 'timeout'] as const)('does not replace a bound session after %s', async failure => {
+    const slug = await fixture(); const original = await session(slug);
+    let creates = 0;
+    const fake = Fastify();
+    fake.get('/v1/checkout/sessions/:id', async (_request, reply) => {
+      if (failure === 'timeout') { await new Promise(resolve => setTimeout(resolve, 1700)); return {}; }
+      if (failure === 'server_error') return reply.code(500).send({});
+      if (failure === 'malformed') return {};
+      return { id: original.id, object: 'checkout.session', url: `http://mock.test/checkout/${original.id}`,
+        status: 'open', payment_status: failure === 'inconsistent' ? 'paid' : 'unpaid', client_reference_id: original.purchase.id,
+        amount_total: failure === 'mismatch' ? 1 : 12345, currency: 'usd' };
+    });
+    fake.post('/v1/checkout/sessions', async () => { creates++; return {}; });
+    const address = await fake.listen({ port: 0, host: '127.0.0.1' });
+    const isolated = buildApp({ databaseUrl: url.href, payments: { stripeUrl: address, stripePublicUrl: 'http://mock.test' } });
+    try {
+      const response = await isolated.inject({ method: 'POST', url: `/api/auctions/${slug}/checkout`, headers: { 'x-demo-user-id': '2' }, payload: {} });
+      expect(response.statusCode).toBe(503);
+      expect(creates).toBe(0);
+      expect((await pool.query('SELECT session_id FROM purchases WHERE auction_slug=$1', [slug])).rows[0].session_id).toBe(original.id);
+    } finally { await isolated.close(); await fake.close(); }
+  });
+
 });

@@ -38,7 +38,7 @@ async function create(title: string, delay: number, sold: boolean) {
   return slug;
 }
 async function openSession(index: number, userId: number) {
-  const browser = await chromium.launch({ channel: 'chrome', headless,
+  const browser = await chromium.launch({ channel: 'chrome', chromiumSandbox: true, headless,
     args: headless ? [] : [`--window-position=${positions[index]}`, '--window-size=960,540'] });
   browsers.push(browser);
   const context = await browser.newContext({ viewport: { width: 930, height: 680 } });

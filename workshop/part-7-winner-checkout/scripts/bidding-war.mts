@@ -118,7 +118,7 @@ try {
     const profile = await mkdtemp(join(tmpdir(), 'bidding-war-'));
     profiles.push(profile);
     const context = await chromium.launchPersistentContext(profile, {
-      channel: 'chrome', headless: false, viewport: null,
+      channel: 'chrome', chromiumSandbox: true, headless: false, viewport: null,
       args: ['--no-first-run', '--disable-session-crashed-bubble', '--disable-background-timer-throttling'],
     });
     contexts.push(context);
@@ -158,6 +158,7 @@ try {
           th,td {padding:5px} #war {padding:10px 20px;background:#11243b;color:white}
           #war strong {font-size:18px} #war pre {font:12px/1.3 monospace;margin:4px 0;white-space:pre-wrap}
         `;
+        if (sessionStorage.getItem('war-review') === 'true') style.textContent += '.auction-panel>.listing-form{display:none!important}';
         document.body.append(style);
         const panel = document.createElement('aside');
         panel.id = 'war';
@@ -200,6 +201,13 @@ try {
     await page.goto(`${base}/health`);
     await page.getByRole('status').filter({ hasText: 'OK' }).waitFor();
     const session = await context.newCDPSession(page);
+    // Chrome's version page exposes the actual launch arguments without
+    // requiring an additional automation flag (and its own browser infobar).
+    const versionPage = await context.newPage();
+    await versionPage.goto('chrome://version');
+    const commandLine = await versionPage.locator('#command_line').innerText();
+    assert(!commandLine.includes('--no-sandbox'), 'Chrome must run with its sandbox enabled');
+    await versionPage.close();
     const { windowId } = await session.send('Browser.getWindowForTarget');
     const geometry = await page.evaluate(() => {
       const desktop = screen as Screen & { availLeft?: number; availTop?: number };
@@ -434,7 +442,7 @@ try {
     simultaneousBid: { amountCents: 10100, responseStatuses: statuses, persistedCount: final.bids.filter(bid => bid.amountCents === 10100).length },
     lateBid: { amountCents: 10500, attemptedAt: lateAttemptAt, status: lateStatus, persistedCount: final.bids.filter(bid => bid.amountCents === 10500).length },
     realtime: { pollingDisabled: true, focusRefreshDisabled: true, notificationsPerWindow: notifications.map(events => events.length), documentNavigationsPerWindowAfterReviewReload: navigations, pageErrors },
-    headed: true, browser: 'Google Chrome', windowBounds, clearedReviewNotices,
+    headed: true, browser: 'Google Chrome', chromiumSandbox: true, windowBounds, clearedReviewNotices,
     notificationDelivery: { signalsPerWindow: outcomeSignals, subscriptionsPerWindow: recipientSubscriptions,
       sellerModal: 'Your auction sold', winnerModal: 'You won the auction', winnerWindow: 2,
       losingBidderModals: false, recipientRows: recipientRows.rows, popupsVerifiedThenDismissedForCheckout: true },

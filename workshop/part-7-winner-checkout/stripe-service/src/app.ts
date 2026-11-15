@@ -59,6 +59,8 @@ function publicSession(session: CheckoutSession) {
     status: session.status,
     payment_status: session.payment_status,
     client_reference_id: session.client_reference_id,
+    amount_total: session.amount_cents,
+    currency: 'usd',
   };
 }
 

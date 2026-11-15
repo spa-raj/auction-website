@@ -26,7 +26,8 @@
     "rabbitmq:up": "docker compose -f ../docker-compose.yml up -d --wait rabbitmq && npm run rabbitmq:setup",
     "worker:notifications": "npm run worker:notifications --workspace server",
     "test:notifications": "tsx scripts/notifications.mts",
-    "test:checkout": "tsx scripts/checkout.mts"
+    "test:checkout": "tsx scripts/checkout.mts",
+    "test:payment-recovery": "tsx scripts/payment-recovery.mts"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

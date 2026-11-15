@@ -4,13 +4,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Database } from './db.js';
 import { auctions, paymentEvents, purchases } from './schema.js';
-import { purchaseResponseSchema } from '../../shared/purchase.js';
+import { purchaseResponseSchema, type PurchaseResponse } from '../../shared/purchase.js';
 
 const userSchema = z.coerce.number().int().min(1).max(10);
 const slugSchema = z.string().regex(/^[a-z0-9-]{1,180}$/);
 const sessionSchema = z.object({
   id: z.string().regex(/^cs_test_[a-f0-9]+$/), object: z.literal('checkout.session'), url: z.url(),
   status: z.enum(['open', 'complete']), payment_status: z.enum(['unpaid', 'paid']), client_reference_id: z.uuid(),
+  amount_total: z.number().int().positive().safe(), currency: z.literal('usd'),
 });
 const completionSchema = z.object({
   eventId: z.uuid(), eventType: z.literal('checkout.session.completed'), occurredAt: z.iso.datetime(),
@@ -32,16 +33,47 @@ export function registerPayments(app: FastifyInstance, db: Database, options: Pa
     .from(purchases).innerJoin(auctions, eq(auctions.slug, purchases.auctionSlug))
     .where(eq(purchases.auctionSlug, slug)))[0];
 
+  type StoredPurchase = typeof purchases.$inferSelect;
+  function matches(session: z.infer<typeof sessionSchema>, purchase: StoredPurchase) {
+    return session.client_reference_id === purchase.id && session.amount_total === purchase.amountCents
+      && session.currency === purchase.currency
+      && session.url === new URL(`/checkout/${session.id}`, stripePublicUrl).href
+      && ((session.status === 'open' && session.payment_status === 'unpaid')
+        || (session.status === 'complete' && session.payment_status === 'paid'));
+  }
+  async function inspect(purchase: StoredPurchase): Promise<PurchaseResponse['recovery']> {
+    if (purchase.status === 'paid' || !purchase.sessionId) return 'none';
+    try {
+      const response = await fetch(new URL(`/v1/checkout/sessions/${purchase.sessionId}`, stripeUrl), { signal: AbortSignal.timeout(1500) });
+      if (response.status === 404) return 'checkout_missing';
+      if (!response.ok) throw new Error(`Mock lookup returned ${response.status}`);
+      const session = sessionSchema.parse(await response.json());
+      if (session.id !== purchase.sessionId || !matches(session, purchase)) throw new Error('Mock session does not match purchase');
+      return session.payment_status === 'paid' ? 'confirmation_pending' : 'none';
+    } catch { return 'service_unavailable'; }
+  }
+
   app.get<{ Params: { slug: string } }>('/api/auctions/:slug/purchase', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store');
     const user = userSchema.safeParse(request.headers['x-demo-user-id']);
     if (!user.success || !slugSchema.safeParse(request.params.slug).success) return reply.code(400).send({ message: 'Select a valid demo user and auction.' });
     const row = await readPurchase(request.params.slug);
     if (!row) return reply.code(404).send({ message: 'There is no purchase for this auction.' });
     if (user.data !== row.purchase.winnerId && user.data !== row.sellerId) return reply.code(403).send({ message: 'Payment status is available to the winner and seller.' });
-    return purchaseResponseSchema.parse({ purchase: { ...row.purchase, paidAt: row.purchase.paidAt?.toISOString() ?? null } });
+    const recovery = await inspect(row.purchase);
+    // A webhook may commit during the provider lookup. Re-read before responding;
+    // provider status itself never marks a purchase paid.
+    const current = (await readPurchase(request.params.slug))!;
+    const summary = { auctionSlug: current.purchase.auctionSlug, amountCents: current.purchase.amountCents,
+      currency: current.purchase.currency, status: current.purchase.status, paidAt: current.purchase.paidAt?.toISOString() ?? null };
+    const role = user.data === current.purchase.winnerId ? 'winner' : 'seller';
+    return purchaseResponseSchema.parse({ role,
+      purchase: role === 'winner' ? { ...summary, id: current.purchase.id } : summary,
+      recovery: current.purchase.status === 'paid' ? 'none' : recovery });
   });
 
   app.post<{ Params: { slug: string } }>('/api/auctions/:slug/checkout', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store');
     const user = userSchema.safeParse(request.headers['x-demo-user-id']);
     if (!user.success || !slugSchema.safeParse(request.params.slug).success) return reply.code(400).send({ message: 'Select a valid demo winner and auction.' });
     // No browser-controlled amount, identity, currency or return URL is accepted.
@@ -55,7 +87,11 @@ export function registerPayments(app: FastifyInstance, db: Database, options: Pa
       const [auction] = await tx.select({ title: auctions.title }).from(auctions).where(eq(auctions.slug, purchase.auctionSlug));
       const returnUrl = new URL(`/items/${purchase.auctionSlug}`, webUrl).href;
       try {
-        // Repeat create also recovers a lost API response using the purchase UUID.
+        const recovery = await inspect(purchase);
+        if (recovery === 'service_unavailable') throw new Error('Cannot verify the existing checkout session');
+        if (recovery === 'confirmation_pending') return { code: 200, body: { status: 'confirmation_pending' } };
+        // Only an authoritative 404 permits replacing a bound, unpaid session.
+        // Reuse the same purchase UUID even when a previous response was lost.
         const response = await fetch(new URL('/v1/checkout/sessions', stripeUrl), {
           method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(3000),
           body: JSON.stringify({ mode: 'payment', client_reference_id: purchase.id,
@@ -66,12 +102,13 @@ export function registerPayments(app: FastifyInstance, db: Database, options: Pa
         });
         if (!response.ok) throw new Error(`Mock checkout returned ${response.status}`);
         const session = sessionSchema.parse(await response.json());
-        const expected = new URL(`/checkout/${session.id}`, stripePublicUrl).href;
-        if (session.client_reference_id !== purchase.id || session.url !== expected || (purchase.sessionId && session.id !== purchase.sessionId)) {
+        if (!matches(session, purchase) || (purchase.sessionId && session.id !== purchase.sessionId && recovery !== 'checkout_missing')) {
           throw new Error('Mock session does not match the stored purchase');
         }
         await tx.update(purchases).set({ sessionId: session.id, sessionUrl: session.url }).where(eq(purchases.id, purchase.id));
-        return { code: 200, body: { status: 'checkout', url: session.url } };
+        return session.payment_status === 'paid'
+          ? { code: 200, body: { status: 'confirmation_pending' } }
+          : { code: 200, body: { status: 'checkout', url: session.url } };
       } catch (error) {
         request.log.error({ err: error, purchaseId: purchase.id }, 'Checkout unavailable');
         return { code: 503, body: { message: 'Payment service is unavailable. Your purchase is still outstanding. Retry checkout shortly.' } };
