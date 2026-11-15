@@ -77,3 +77,17 @@ Actually checked in this run:
 - After the verification-script update, `npm run typecheck`, `npm test` (103 passing) and `npm run build` passed. Regression logs: `/tmp/part6-headed-war-tests.log` and `/tmp/part6-headed-war-build.log`.
 
 This headed run did not test no-bid outcomes, broker outages, duplicate replay or offline recovery; those are separate Slice 2 checks above.
+
+## Issue #8 — Drizzle refactor (2026-11-15)
+
+The API, close worker/relay and notification persistence now use Drizzle query builders and transactions. Existing migrations and integrity constraints are unchanged. Runtime source has no direct `pg.query` calls or `sql.raw`; the explicit migration runner and administrative/test scripts retain SQL. Small parameterized PostgreSQL expressions preserve database-clock checks, literal substring search and computed projections.
+
+Conflicting instructions were explicitly updated in AGENTS.md, GRILL.md, IMPLEMENTATION_PLAN.md and the Part 6 exception in ../docs/orm-safety-recommendation.md. The earlier slice stop and retain-raw-SQL recommendation do not override this authorized refactor.
+
+Validation in the isolated worktree:
+
+- `npm test`: 66 server + 37 web tests passed, using PostgreSQL, Redis and RabbitMQ test resources. This includes independent competing bidders/closers, post-lock deadline checks, coherent detail reads, skipped locks, atomic rollback, uniqueness, confirm-before-marking, real broker redelivery and idempotent dismissal. Lock probes now recognize Drizzle's quoted queries; failure-injection tests inspect the original database error through Drizzle's `cause`.
+- `npm run build`: passed, including strict source typechecks. `skipLibCheck` excludes dependency declaration errors from Drizzle's optional non-PostgreSQL drivers.
+- Notification browser assertions passed in headless Google Chrome: actual websocket signals with reconciliation disabled, seller/winner selection, no losing-bidder popup, cross-window dismissal, replay without resurrection, identity switching, failed-dismissal retry, seller-only no-bid result, queued notices, offline recovery and mobile layout. The original four-process run crashed; the successful retry used one Chrome process with independent browser contexts and unchanged assertions. Evidence: `/tmp/part6-notifications-uwnwY0/evidence.json`.
+- Separate headless Chrome verification passed for deadline-driven finalizing state with disabled bidding, persisted sold/no-bid states after reload, HTTP `/api/health` (200, database/Redis healthy), and the `/health` page. Auction locks deliberately held finalization until the finalizing state was asserted. Evidence and screenshots: `/tmp/issue8-outcomes-EQghiQ/`.
+- Browser verification used API 3206/web 5206 with `auction_part_6_test`, the test RabbitMQ vhost and test Redis prefix. Live data, root Compose and the main working copy were not changed. Captures remain outside the repository.

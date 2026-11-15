@@ -32,7 +32,7 @@ async function waitForBlockedBids(count: number) {
   while (Date.now() < until) {
     const result = await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM pg_stat_activity
       WHERE datname=current_database() AND wait_event_type='Lock'
-      AND query='SELECT slug FROM auctions WHERE slug=$1 FOR UPDATE'`);
+      AND query ILIKE '%from "auctions"%for update%'`);
     if (result.rows[0].count >= count) return;
     await sleep(10);
   }

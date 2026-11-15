@@ -1,5 +1,7 @@
 # Part 6 — Current Approved Slice
 
+Current authorization: issue #8 approves a behavior-preserving Part 6 Drizzle refactor and PR. Earlier slice review stops below are historical and do not block this refactor. All concurrency and notification guarantees remain required.
+
 ## Slice 1 — Authoritative closing and transactional outbox
 
 Status: Implemented; verification and review results are in VERIFICATION.md. Stop for review.
