@@ -114,7 +114,7 @@ describe('authoritative auction close', () => {
       BEGIN IF NEW.auction_slug='${slug}' THEN RAISE EXCEPTION 'injected outbox failure'; END IF; RETURN NEW; END $$;
       CREATE TRIGGER fail_event BEFORE INSERT ON auction_outbox FOR EACH ROW EXECUTE FUNCTION fail_event()`);
     try {
-      await expect(close()).rejects.toThrow('injected outbox failure');
+      await expect(close()).rejects.toMatchObject({ cause: { message: 'injected outbox failure' } });
       expect((await pool.query('SELECT 1 FROM auction_outcomes WHERE auction_slug=$1', [slug])).rowCount).toBe(0);
       expect((await pool.query('SELECT 1 FROM auction_outbox WHERE auction_slug=$1', [slug])).rowCount).toBe(0);
     } finally { await pool.query('DROP TRIGGER fail_event ON auction_outbox; DROP FUNCTION fail_event()'); }

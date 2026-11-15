@@ -63,3 +63,11 @@ For manual review, open two windows at /search, select seller Bare Metal Matchma
 See VERIFICATION.md for actual checks/evidence, GRILL.md for accepted decisions and docs/adr/0004-transactional-outbox.md for trade-offs. Earlier-part records and Slice 1 verification under docs/ are historical.
 
 `npm run test:bidding-war` now also verifies the authoritative SOLD outcome, confirmed outbox publication and actual seller/winner modals. It runs headed in four separate, geometrically verified 2×2 Chrome windows and keeps the final state open. It clears only earlier generated review notices for its demo identities; unrelated pending notices cause it to stop rather than dismiss them. Bid and popup assertions require Socket.IO with fallback polling/focus refresh disabled. A final explicit HTTP catch-up confirms recorded results on every mounted page without a reload. See VERIFICATION.md for observed results and temporary evidence paths.
+
+## Data access
+
+The API, close worker/outbox relay and notification worker use Drizzle ORM over the existing `pg` pools. `server/src/schema.ts` maps the deployed tables for typed queries; the existing explicit SQL migrations remain authoritative for constraints, indexes, defaults and seeds. No schema push, migration regeneration or data conversion is required. Small parameterized PostgreSQL expressions preserve clock, literal-search and projection behavior; runtime services do not execute handwritten SQL statements.
+
+Bid and detail transactions acquire the auction lock before a separate summary read. Acceptance time is checked after that read; responses and realtime signals wait for the transaction to finish. Closing retains bounded oldest-first `SKIP LOCKED` claims, a fresh outcome recheck and bid read, and atomic outcome/outbox persistence. Publication marking follows broker confirmation; recipient insertion remains atomic and idempotent before ACK.
+
+Strict source type checking remains enabled. `skipLibCheck` avoids checking Drizzle's optional driver declarations for other databases; those drivers are not application dependencies.

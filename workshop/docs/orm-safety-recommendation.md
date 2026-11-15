@@ -3,6 +3,10 @@
 Date: 2026-11-15. Addresses [issue #9](https://github.com/spa-raj/codex-course/issues/9).
 Scope: all application parts present in this checkout, reviewed at `7b68386`.
 
+## Part 6 exception — issue #8
+
+The user explicitly authorized migrating Part 6 to Drizzle in issue #8. The recommendation below is historical for Part 6 and remains applicable to the other parts. Part 6 now uses typed schema mappings and Drizzle transactions while preserving separate lock/read statements, deadline checks, explicit SQL migrations and notification guarantees.
+
 ## Recommendation
 
 Keep `pg`, parameterized SQL, and explicit SQL migrations. Do not replace the

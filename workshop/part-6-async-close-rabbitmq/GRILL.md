@@ -1,5 +1,7 @@
 # Asynchronous Auction Close — Design Interview
 
+Current authorization: issue #8 approves a behavior-preserving Part 6 Drizzle refactor and PR. Earlier slice review stops below are historical and do not block this refactor. All concurrency and notification guarantees remain required.
+
 Status: Slice 1 reviewed. Slice 2 explicitly approved and implemented: confirmed publication, notification worker, idempotent recipient delivery and Redis/Socket.IO popups. Stop after verification for review.
 
 ## Fixed requirements

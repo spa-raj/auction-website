@@ -102,7 +102,7 @@ describe('application-clock closing rules', () => {
         const result = await pool.query<{ blocked: boolean }>(`SELECT EXISTS (
           SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
           AND $1=ANY(pg_blocking_pids(pid))
-          AND query='SELECT slug FROM auctions WHERE slug=$1 FOR UPDATE') AS blocked`, [blockerPid]);
+          AND query ILIKE '%from "auctions"%for update%') AS blocked`, [blockerPid]);
         if (result.rows[0].blocked) { blocked = true; break; }
         await sleep(10);
       }
@@ -144,7 +144,7 @@ describe('application-clock closing rules', () => {
         const result = await pool.query<{ blocked: boolean }>(`SELECT EXISTS (
           SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
           AND $1=ANY(pg_blocking_pids(pid))
-          AND query='SELECT slug FROM auctions WHERE slug=$1 FOR SHARE') AS blocked`, [blockerPid]);
+          AND query ILIKE '%from "auctions"%for share%') AS blocked`, [blockerPid]);
         if (result.rows[0].blocked) { blocked = true; break; }
         await sleep(10);
       }

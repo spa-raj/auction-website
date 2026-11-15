@@ -144,7 +144,7 @@ describe('durable recipient processing', () => {
       BEGIN IF NEW.recipient_id=2 THEN RAISE EXCEPTION 'recipient insert failed'; END IF; RETURN NEW; END $$;
       CREATE TRIGGER fail_recipient BEFORE INSERT ON recipient_notifications FOR EACH ROW EXECUTE FUNCTION fail_recipient()`);
     try {
-      await expect(recordNotifications(pool,event)).rejects.toThrow('recipient insert failed');
+      await expect(recordNotifications(pool,event)).rejects.toMatchObject({ cause: { message: 'recipient insert failed' } });
       expect(await rows(event)).toHaveLength(0);
     } finally { await pool.query('DROP TRIGGER fail_recipient ON recipient_notifications; DROP FUNCTION fail_recipient()'); }
     await recordNotifications(pool,event); expect(await rows(event)).toHaveLength(2);

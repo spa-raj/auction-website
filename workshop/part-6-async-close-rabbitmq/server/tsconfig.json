@@ -5,7 +5,9 @@
     "moduleResolution": "NodeNext",
     "strict": true,
     "noEmit": true,
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    // Drizzle's declarations include optional non-PostgreSQL drivers; source remains strict.
+    "skipLibCheck": true
   },
   "include": ["src"]
 }
