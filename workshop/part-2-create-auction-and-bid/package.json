@@ -13,10 +13,12 @@
     "dev": "API_PORT=3102 WEB_PORT=5102 DATABASE_URL=postgres://auction:auction@localhost:55432/auction_part_2 concurrently -k -n server,web \"npm run dev --workspace server\" \"npm run dev --workspace web\"",
     "start": "npm run db:up && npm run migrate && npm run dev",
     "test": "DATABASE_URL=postgres://auction:auction@localhost:55432/auction_part_2 npm run test --workspace server && npm run test --workspace web",
-    "typecheck": "tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p web/tsconfig.json",
-    "build": "npm run typecheck && npm run build --workspace web"
+    "typecheck": "tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
+    "build": "npm run typecheck && npm run build --workspace web",
+    "test:bidding-war": "tsx scripts/bidding-war.mts"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "playwright": "^1.65.1"
   }
 }

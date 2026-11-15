@@ -33,3 +33,44 @@ Starting prices are USD with at most two decimal places ($0.01–$1,000,000), st
 ## Design
 
 See [agreed decisions](GRILL.md), [domain glossary](CONTEXT.md), [ADRs](docs/adr/), and [implementation slices](IMPLEMENTATION_PLAN.md). Part 2 handles sequential bidding only; concurrency protection is deferred to Part 3.
+## Bidding War demonstration
+
+Start the app with `npm start`, then in another terminal in this directory run:
+
+```bash
+npm run test:bidding-war
+# Keep the final four Chrome windows open for 30 minutes:
+BIDDING_WAR_HOLD_MS=1800000 npm run test:bidding-war
+```
+
+Requires installed Google Chrome and a desktop large enough for four readable
+windows (at least 1200×900). This test always runs headed, with one seller and
+three bidders in separate Chrome processes and temporary profiles, tiled 2×2.
+The seller posts through the actual form with a deadline about 20 seconds away.
+The activity panel and compact presentation styles are injected by Playwright
+only; the auction form and bid history are the real application UI.
+
+The test **passes when the existing concurrency defect is reproduced**: all
+three bidders accept $101 against the same $100 starting price. A temporary
+PostgreSQL trigger, restricted to that run's unique auction slug, holds inserts
+using an advisory lock until all three validated requests reach the database.
+It changes timing only, never prices, responses, or the endpoint. A bounded
+barrier wait fails if three requests do not arrive. The lock, trigger and
+function are removed before the staggered and deadline phases, and also on
+ordinary failures, Ctrl+C or SIGTERM. As with any process cleanup, SIGKILL or a
+machine crash cannot run the cleanup handler; interrupted runs can be identified
+by their unique `bidding_war_` trigger/function names.
+
+Staggered submissions demonstrate both acceptance and stale-price rejection.
+Browser fetches exercise the API just before and just after the deadline so
+the disabled UI cannot mask server behavior. Final assertions check the six
+persisted bids, duplicate amounts from distinct bidders, winner, `ENDED`, disabled
+bid buttons and visible history in all four windows. Screenshots go into a
+separate OS temporary directory printed by the test. The ended auction remains
+available for inspection; unrelated data is preserved.
+
+Windows stay open for ten minutes by default. `BIDDING_WAR_HOLD_MS` accepts a
+nonnegative integer; `0` closes them after verification. Ctrl+C closes the windows
+and removes temporary profiles. `BIDDING_WAR_BASE_URL` and `DATABASE_URL` can
+override the default Part 2 web URL and database, and must refer to the same app.
+The endpoint intentionally remains unsafe for simultaneous bidding.

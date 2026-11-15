@@ -81,7 +81,7 @@ function ItemPage({ slug, activeUser }: { slug: string; activeUser: DemoUser | u
       <section className="item-summary"><p className="product-category">{item.category} · {item.condition}</p><h1>{item.title}</h1>{item.kicker && <p className="item-kicker">{item.kicker}</p>}
         <div className="auction-panel"><div className="current-price"><span>{item.bidCount ? 'Current bid' : 'Starting price'}</span><strong>{formatCurrency(item.currentAmountCents)}</strong><small>{item.bidCount} bids</small></div>
           <div className="bidder"><span>{ended ? 'Winner' : 'Current bidder'}</span><strong>{item.currentBidder?.name ?? 'No bids'}</strong></div>
-          <div className="ending"><span>Status</span><strong>{ended ? 'Ended' : timeLeft(item.closesAt)}</strong></div>
+          <div className="ending"><span>Status</span><strong>{ended ? 'ENDED' : timeLeft(item.closesAt)}</strong></div>
           <p>Closes <time dateTime={item.closesAt}>{new Date(item.closesAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time> (your local time)</p>
           <form className="listing-form" onSubmit={placeBid}>
             <label htmlFor="bid-amount">Your bid (USD)</label>
