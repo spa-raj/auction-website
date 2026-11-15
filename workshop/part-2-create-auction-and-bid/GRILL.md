@@ -1,6 +1,6 @@
 # Posting Auctions and Making Bids — Design Decisions
 
-Status: Slice 1 (browsing and users) accepted. Slice 2 (posting) is complete and verified; waiting for review before Slice 3 (bidding). This supersedes the earlier two-slice numbering, which grouped posting with browsing.
+Status: Slice 1 (browsing and users) accepted. Slice 2 (posting) is complete and verified; Slice 3 (bidding) is implemented and ready for review. This supersedes the earlier two-slice numbering, which grouped posting with browsing.
 
 ## Agreed behavior
 
@@ -66,4 +66,4 @@ The API owns validation, seller attribution, minimum-bid rules, and deadline enf
 
 ## Approval and delivery
 
-The user accepted Slice 1 and authorized Slice 2: posting an auction. Verify the complete posting flow, give browser review steps, then stop. Slice 3 is bidding and is not authorized yet. See [implementation checkpoints](IMPLEMENTATION_PLAN.md) and [verification results](VERIFICATION.md).
+The user accepted Slice 1 and authorized Slice 2: posting an auction. Verify the complete posting flow, give browser review steps, then stop. Slice 3 bidding was subsequently authorized and is now ready for review. Simultaneous-bid protection remains deferred to Part 3. See [implementation checkpoints](IMPLEMENTATION_PLAN.md) and [verification results](VERIFICATION.md).

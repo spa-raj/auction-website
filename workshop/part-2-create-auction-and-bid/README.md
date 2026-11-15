@@ -15,7 +15,7 @@ Browse, search, filter and sort the six persisted seed auctions. Each fresh tab 
 
 ## Slice 2 — Posting
 
-Use **Sell** to open `/auctions/new`, enter the required fields and publish immediately as the selected user. The form shows field-level validation and preserves entered values after a request failure. A successful post opens `/items/:slug`. Category illustrations are automatic. Seeded listings preserve specifications; new listings hide that section. Details show persisted bid history and ended status. Bid submission ships in Slice 3 and is currently unavailable.
+Use **Sell** to open `/auctions/new`, enter the required fields and publish immediately as the selected user. The form shows field-level validation and preserves entered values after a request failure. A successful post opens `/items/:slug`. Category illustrations are automatic. Seeded listings preserve specifications; new listings hide that section. Details show persisted bid history and ended status. Slice 3 adds direct bids, newest-first history and five-second detail refresh. Sellers cannot bid on their own auctions; every bid must exceed the current amount by at least $1, including the first bid. Ended auctions reject bids and display a winner or No bids. Stale bids are rejected with the new minimum; they are never automatically retried. Bid values must fit PostgreSQL integer cents (at most $21,474,836.47). Simultaneous-bid protection remains deferred to Part 3.
 
 Starting prices are USD with at most two decimal places ($0.01–$1,000,000), stored as integer cents. Closing time is entered in your local timezone, sent and stored as UTC, and displayed in the viewer's local timezone. The API enforces the deadline being in the future at insertion.
 

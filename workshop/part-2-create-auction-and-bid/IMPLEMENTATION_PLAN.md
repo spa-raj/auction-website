@@ -1,6 +1,6 @@
 # Implementation Slices
 
-Status: Slice 1 accepted. Slice 2 (posting) implemented and verified, ready for review. Stop for review before Slice 3 (bidding). This numbering follows the user's latest instruction and supersedes the earlier two-slice plan that grouped posting with browsing. Behavior is defined in [GRILL.md](GRILL.md).
+Status: Slice 1 accepted. Slice 2 accepted. Slice 3 (bidding) implemented and verified; stop for review. This numbering follows the user's latest instruction and supersedes the earlier two-slice plan that grouped posting with browsing. Behavior is defined in [GRILL.md](GRILL.md).
 
 ## Slice 1 — Browse persisted auctions and select a demo user (accepted)
 
@@ -31,7 +31,7 @@ Required checks: `npm test`, `npm run build` (strict TypeScript and production V
 
 Stop after complete verification and clear review instructions. Wait for confirmation before Slice 3.
 
-## Slice 3 — Bid and inspect the outcome (not started)
+## Slice 3 — Bid and inspect the outcome (ready for review)
 
 Visible outcome: another demo user bids on a posted auction and sees persisted history, updates and closing outcomes.
 

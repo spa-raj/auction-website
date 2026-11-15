@@ -1,3 +1,21 @@
+# Slice 3 Verification
+
+Slice 3 is ready for review. Bidding uses sequential API validation only; simultaneous-bid protection remains explicitly deferred to Part 3.
+
+- `npm test`: 31 real-PostgreSQL API tests and 37 web validation/identity tests passed.
+- `npm run build`: strict TypeScript checks and production build passed.
+- API regression verifies seller rejection (403), $1 first/subsequent increment, accepted bids and leader rebids, malformed amounts/identities, newest-first persisted history, missing auctions and deadline rejection (409).
+- Chrome verified disabled seller controls and direct API rejection, insufficient-bid error with retained input, accepted bids, updates in another tab within five seconds, reload persistence/history order, mobile layout and healthy database.
+- Chrome also verified stale-price rejection refreshes amount/minimum without automatic resubmission, and ended auctions disable bidding, reject requests and show the accepted winner or No bids.
+- The bid form was visually inspected. Screenshot: `/tmp/part2-bid-form.png`; temporary scripts are under `/tmp/auction-playwright-check`.
+- Existing auctions were preserved. Review auctions were added for open bidding and closing behavior; no reset was run.
+
+Review the open auction at http://localhost:5102/items/bidding-review-1794736451886-d84528a3-6a00-41ad-8e91-1ee88f819bd4 . Select seller Decommissioned Dreams to check self-bid blocking, then select another user and bid at least $1 above the displayed amount. Reload and inspect history. Open a second tab to check automatic updates. Stop for user review.
+
+---
+
+## Earlier verification record
+
 # Part 2 Verification
 
 Verified on November 15, 2026. Slice 1 (browsing/users) is accepted. Slice 2 (posting) is ready for review. Slice 3 (bidding) has not started. This follows the user's latest slice numbering, replacing the earlier combined browsing/posting checkpoint.

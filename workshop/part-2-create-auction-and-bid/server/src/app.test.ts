@@ -35,10 +35,10 @@ describe('persisted auction browsing and posting', () => {
     for (const [index,slug] of seeds.entries()) {
       expect(auctions.some(a => a.slug === slug)).toBe(true);
       const detail = detailSchema.parse((await app.inject(`/api/auctions/${slug}`)).json());
-      expect(detail.bids).toHaveLength(counts[index]);
-      expect(detail.auction.bidCount).toBe(counts[index]);
-      expect(detail.auction.currentAmountCents).toBe(prices[index]);
-      expect(detail.bids[0].amountCents).toBe(prices[index]);
+      expect(detail.bids.length).toBeGreaterThanOrEqual(counts[index]);
+      expect(detail.auction.bidCount).toBe(detail.bids.length);
+      expect(detail.auction.currentAmountCents).toBeGreaterThanOrEqual(prices[index]);
+      expect(detail.bids[0].amountCents).toBe(detail.auction.currentAmountCents);
       for (const [i,bid] of detail.bids.entries()) {
         expect(bid.bidder.id).not.toBe(detail.auction.seller.id);
         if (i) { expect(Date.parse(bid.createdAt)).toBeLessThanOrEqual(Date.parse(detail.bids[i-1].createdAt)); expect(bid.amountCents).toBeLessThan(detail.bids[i-1].amountCents); }
@@ -143,6 +143,24 @@ describe('persisted auction browsing and posting', () => {
     expect((await app.inject({method:'POST',url:'/api/auctions',payload:invalidUserListing})).statusCode).toBe(400);
     for (const user of ['0','11','abc','1.5']) expect((await post(invalidUserListing,user)).statusCode).toBe(400);
     expect((await pool.query('SELECT count(*)::int AS count FROM auctions WHERE title=$1',[invalidUserListing.title])).rows[0].count).toBe(0);
+  });
+  it('enforces sequential bidding rules and persists newest-first history', async () => {
+    const posted=await post({...listing(),startingPriceCents:10000});const slug=posted.json<{slug:string}>().slug;
+    const bid=(amountCents:unknown,user='3')=>app.inject({method:'POST',url:`/api/auctions/${slug}/bids`,headers:{'x-demo-user-id':user},payload:{amountCents}});
+    expect((await bid(10100,'2')).statusCode).toBe(403);
+    for(const amount of [10000,10099]) expect((await bid(amount)).statusCode).toBe(409);
+    for(const amount of [-1,1.5,'10100',1e40]) expect((await bid(amount)).statusCode).toBe(400);
+    expect((await bid(10100,'11')).statusCode).toBe(400);
+    expect((await bid(10100)).statusCode).toBe(201);
+    expect((await bid(10100,'4')).statusCode).toBe(409);
+    expect((await bid(10200)).statusCode).toBe(201);
+    const detail=detailSchema.parse((await app.inject(`/api/auctions/${slug}`)).json());
+    expect(detail.auction).toMatchObject({currentAmountCents:10200,bidCount:2,currentBidder:{id:3}});
+    expect(detail.bids.map(b=>b.amountCents)).toEqual([10200,10100]);
+    await pool.query("UPDATE auctions SET closes_at=clock_timestamp()-interval '1 second' WHERE slug=$1",[slug]);
+    expect((await bid(10300,'4')).statusCode).toBe(409);
+    expect(detailSchema.parse((await app.inject(`/api/auctions/${slug}`)).json()).bids).toHaveLength(2);
+    expect((await app.inject({method:'POST',url:'/api/auctions/no-such-auction/bids',headers:{'x-demo-user-id':'3'},payload:{amountCents:10100}})).statusCode).toBe(404);
   });
   it('returns useful errors for invalid catalog filters and missing details', async () => {
     expect((await app.inject('/api/auctions?sort=unsafe')).statusCode).toBe(400);

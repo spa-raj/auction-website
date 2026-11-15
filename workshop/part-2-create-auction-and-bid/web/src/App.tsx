@@ -41,20 +41,36 @@ function CatalogPage({ home }: { home: boolean }) {
     </main>
   </>;
 }
-function ItemPage({ slug }: { slug: string }) {
+function ItemPage({ slug, activeUser }: { slug: string; activeUser: DemoUser | undefined }) {
   const [item, setItem] = useState<Auction>();
   const [bids, setBids] = useState<Bid[]>([]);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
   const [offset, setOffset] = useState(0);
+  const [bidError,setBidError] = useState('');
+  const [bidValue,setBidValue] = useState('');
+  const [pending,setPending] = useState(false);
+  const [refresh,setRefresh] = useState(0);
+  async function placeBid(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (pending || !activeUser) return;
+    const raw=bidValue.replace(/,/g,'');
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) {setBidError('Enter a USD amount with at most two decimal places.');return;}
+    const amountCents=Math.round(Number(raw)*100);
+    if (!Number.isSafeInteger(amountCents) || amountCents>2147483647) {setBidError('The bid must be at most $21,474,836.47.');return;}
+    setPending(true);setBidError('');
+    try {await fetchJson(`/api/auctions/${encodeURIComponent(slug)}/bids`,z.object({accepted:z.boolean()}),{method:'POST',headers:{'content-type':'application/json','x-demo-user-id':String(activeUser.id)},body:JSON.stringify({amountCents})});setBidValue('');}
+    catch(error){setBidError(error instanceof Error?error.message:'Unable to place bid.');}
+    finally{setPending(false);setRefresh(value=>value+1);}
+  }
   useEffect(() => {
     let live = true;
     fetchJson(`/api/auctions/${encodeURIComponent(slug)}`, detailSchema).then(result => {
-      if (live) { setItem(result.auction); setBids(result.bids); setOffset(Date.parse(result.serverTime) - Date.now()); }
+      if (live) { setError(''); setItem(result.auction); setBids(result.bids); setOffset(Date.parse(result.serverTime) - Date.now()); }
     }).catch((error: unknown) => { if (live) setError(error instanceof Error ? error.message : 'Unable to load auction.'); });
+    const poll = window.setInterval(()=>setRefresh(value=>value+1),5000);
     const timer = window.setInterval(() => setNow(Date.now()),1000);
-    return () => { live = false; clearInterval(timer); };
-  }, [slug]);
+    return () => { live = false; clearInterval(timer); clearInterval(poll); };
+  }, [slug, refresh]);
   useEffect(() => { if (item) document.title = `${item.title} · Auction House`; }, [item]);
   if (error) return <main className="container empty-state"><Message>{error}</Message><a href="/search">Browse auctions</a></main>;
   if (!item) return <main className="container empty-state">Loading auction…</main>;
@@ -67,7 +83,14 @@ function ItemPage({ slug }: { slug: string }) {
           <div className="bidder"><span>{ended ? 'Winner' : 'Current bidder'}</span><strong>{item.currentBidder?.name ?? 'No bids'}</strong></div>
           <div className="ending"><span>Status</span><strong>{ended ? 'Ended' : timeLeft(item.closesAt)}</strong></div>
           <p>Closes <time dateTime={item.closesAt}>{new Date(item.closesAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time> (your local time)</p>
-          <p className="availability-note">{ended ? 'This auction has ended.' : 'Bidding is not available yet.'}</p>
+          <form className="listing-form" onSubmit={placeBid}>
+            <label htmlFor="bid-amount">Your bid (USD)</label>
+            <input id="bid-amount" inputMode="decimal" value={bidValue} onChange={event=>setBidValue(event.target.value)} disabled={pending || ended || !activeUser || activeUser.id===item.seller.id} />
+            <p>Minimum bid: {formatCurrency(item.currentAmountCents+100)}</p>
+            {ended ? <p>This auction has ended.</p> : activeUser?.id===item.seller.id ? <p>You cannot bid on your own auction.</p> : null}
+            {bidError && <p role="alert" className="error-message">{bidError}</p>}
+            <button className="primary-button" disabled={pending || ended || !activeUser || activeUser.id===item.seller.id}>{pending?'Submitting…':'Place bid'}</button>
+          </form>
         </div>
         <div className="seller-card"><span className="seller-avatar">{item.seller.name.charAt(0)}</span><div><small>Sold by</small><strong>{item.seller.name}</strong><span>{item.location}</span></div></div>
       </section>
@@ -102,7 +125,7 @@ export function App() {
   const path = location.pathname;
   let page;
   if (path === '/auctions/new') page = <NewAuctionPage activeUser={activeUser} />;
-  else if (path.startsWith('/items/')) page = <ItemPage slug={path.slice('/items/'.length)} />;
+  else if (path.startsWith('/items/')) page = <ItemPage activeUser={activeUser} slug={path.slice('/items/'.length)} />;
   else if (path === '/health') page = <HealthPage />;
   else if (path === '/' || path === '/search') page = <CatalogPage home={path === '/'} />;
   else page = <main className="container empty-state"><h1>Page not found</h1><a href="/">Home</a></main>;

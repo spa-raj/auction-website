@@ -68,6 +68,23 @@ export function buildApp() {
     if (!result.rowCount) return reply.code(400).send({ message: 'Choose a future closing time.' });
     return reply.code(201).header('location', `/api/auctions/${slug}`).send({ slug });
   });
+  app.post<{Params:{slug:string}}>('/api/auctions/:slug/bids', async (request,reply) => {
+    const user = userIdSchema.safeParse(request.headers['x-demo-user-id']);
+    const input = z.object({amountCents:z.number().min(1).max(2_147_483_647).refine(Number.isInteger)}).safeParse(request.body);
+    if (!slugSchema.safeParse(request.params.slug).success || !input.success || !user.success) return reply.code(400).send({message:'Select a valid demo user and enter a bid in whole cents.'});
+    if (!(await pool.query('SELECT id FROM demo_users WHERE id=$1',[user.data])).rowCount) return reply.code(400).send({message:'Invalid demo user.'});
+    // Sequential validation only. Simultaneous-bid protection is intentionally deferred to Part 3.
+    const auction = (await pool.query<Auction>(`${auctionSelect} WHERE a.slug=$1`,[request.params.slug])).rows[0];
+    if (!auction) return reply.code(404).send({message:'Auction not found.'});
+    if (auction.ended) return reply.code(409).send({message:'This auction has ended.'});
+    if (auction.seller.id === user.data) return reply.code(403).send({message:'You cannot bid on your own auction.'});
+    const minimum = auction.currentAmountCents + 100;
+    if (input.data.amountCents < minimum) return reply.code(409).send({message:`Your bid must be at least ${new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(minimum/100)}.`,minimumBidCents:minimum});
+    const accepted = await pool.query(`INSERT INTO bids (auction_slug,bidder_id,amount_cents)
+      SELECT $1,$2,$3 WHERE EXISTS (SELECT 1 FROM auctions WHERE slug=$1 AND closes_at>clock_timestamp()) RETURNING id`,[request.params.slug,user.data,input.data.amountCents]);
+    if (!accepted.rowCount) return reply.code(409).send({message:'This auction has ended.'});
+    return reply.code(201).send({accepted:true});
+  });
   app.addHook('onClose', async () => pool.end());
   return app;
 }
