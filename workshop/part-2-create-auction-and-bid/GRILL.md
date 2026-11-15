@@ -1,6 +1,6 @@
 # Posting Auctions and Making Bids — Design Decisions
 
-Status: design and both slice definitions approved. Slice 1 is implemented and verified; waiting for user review before starting Slice 2.
+Status: Slice 1 (browsing and users) accepted. Slice 2 (posting) is complete and verified; Slice 3 (bidding) is implemented and ready for review. This supersedes the earlier two-slice numbering, which grouped posting with browsing.
 
 ## Agreed behavior
 
@@ -10,7 +10,7 @@ Status: design and both slice definitions approved. Slice 1 is implemented and v
 - Use category illustrations; no image uploads.
 - Publish immediately, with the active user as the seller.
 - Store a future closing time as a UTC timestamp.
-- Use USD and integer cents.
+- Use USD and integer cents. Add thousands-separator commas while entering the starting price, preserve decimal input and normal cursor/editing behavior, and remove display separators when converting to cents.
 - Seed the six existing catalog auctions into PostgreSQL.
 - Normal startup preserves changes. Explicit reset restores Part 2 seed data.
 - Sellers cannot bid on their own auctions.
@@ -19,6 +19,7 @@ Status: design and both slice definitions approved. Slice 1 is implemented and v
 - Show bidder, amount, and time in bid history.
 - A Sell link opens `/auctions/new`; successful posting opens the new auction detail page.
 - New auctions do not require specifications. Hide the specifications section when empty.
+- The posting form shows field-level validation, focuses the first invalid field, clears corrected-field feedback, preserves entered values after request failure, and prevents duplicate in-flight submissions.
 - Support sequential bidding in Part 2. Concurrency protection is explicitly deferred to Part 3.
 
 ## Repository facts
@@ -40,8 +41,8 @@ Status: design and both slice definitions approved. Slice 1 is implemented and v
 - Categories: GPUs, CPUs, Memory, Chassis, Networking, Cooling.
 - Conditions: New, Open box, Used, Refurbished. These choices apply to new listings; preserve existing descriptive condition text on seeded listings.
 - Require trimmed title (1–120 characters), description (1–5,000), and location (1–120).
-- Starting prices range from $0.01 to $1,000,000 with at most two decimal places. Bid amounts also use integer cents; the minimum-increase rule applies to bids.
-- Enter closing time using a clearly labeled local date/time input, convert to UTC for storage, and show deadlines in the viewer's local timezone. Closing time must be in the future, with no maximum duration.
+- Starting prices range from $0.01 to $1,000,000 with at most two decimal places. Show this range on the form and reject oversized amounts with the $1,000,000 cap message, including extremely long inputs. Bid amounts also use integer cents; the minimum-increase rule applies to bids.
+- Enter closing time using a clearly labeled local date/time input, convert to UTC for storage, and show deadlines in the viewer's local timezone. Closing time must be in the future, with no maximum duration. Distinguish a missing date, an impossible/incomplete calendar date (such as February 31), and a real date in the past; only the last case should ask for a future date.
 - Seed real, consistent bid histories with the ten demo users, matching the six existing displayed prices and bid counts. Assign sellers from those users without self-bids; preserve descriptions, illustrations, and specifications.
 - Calculate seed deadlines relative to initial seeding or explicit reset. Normal startup never moves them forward.
 - Keep ended auctions visible. Support text search, category filtering, and sorting by newest, closing soon, and current price. Bid history is newest first.
@@ -65,4 +66,4 @@ The API owns validation, seller attribution, minimum-bid rules, and deadline enf
 
 ## Approval and delivery
 
-The user approved the slice plan and authorized Slice 1 only. Slice 1 is complete; see [verification results](VERIFICATION.md). Stop for user review and confirmation before implementing Slice 2.
+The user accepted Slice 1 and authorized Slice 2: posting an auction. Verify the complete posting flow, give browser review steps, then stop. Slice 3 bidding was subsequently authorized and is now ready for review. Simultaneous-bid protection remains deferred to Part 3. See [implementation checkpoints](IMPLEMENTATION_PLAN.md) and [verification results](VERIFICATION.md).

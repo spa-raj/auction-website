@@ -1,11 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
-import { createAuctionSchema, detailSchema, listSchema, userSchema } from '../../shared/auction';
-import { artByCategory, categories, conditions, formatCurrency, timeLeft, type Auction, type Bid, type DemoUser } from './catalog';
+import { detailSchema, listSchema, userSchema } from '../../shared/auction';
+import { artByCategory, categories, formatCurrency, timeLeft, type Auction, type Bid, type DemoUser } from './catalog';
 import { fetchJson } from './api';
 import { ProductArt } from './components/ProductArt';
 import { ProductCard } from './components/ProductCard';
 import { SiteHeader } from './components/SiteHeader';
+import { NewAuctionPage } from './components/NewAuctionPage';
 import { initialTabUser, rememberTabUser } from './demo-user';
 
 function Message({ children }: { children: string }) { return <p role="alert" className="error-message">{children}</p>; }
@@ -40,20 +41,36 @@ function CatalogPage({ home }: { home: boolean }) {
     </main>
   </>;
 }
-function ItemPage({ slug }: { slug: string }) {
+function ItemPage({ slug, activeUser }: { slug: string; activeUser: DemoUser | undefined }) {
   const [item, setItem] = useState<Auction>();
   const [bids, setBids] = useState<Bid[]>([]);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
   const [offset, setOffset] = useState(0);
+  const [bidError,setBidError] = useState('');
+  const [bidValue,setBidValue] = useState('');
+  const [pending,setPending] = useState(false);
+  const [refresh,setRefresh] = useState(0);
+  async function placeBid(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (pending || !activeUser) return;
+    const raw=bidValue.replace(/,/g,'');
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) {setBidError('Enter a USD amount with at most two decimal places.');return;}
+    const amountCents=Math.round(Number(raw)*100);
+    if (!Number.isSafeInteger(amountCents) || amountCents>2147483647) {setBidError('The bid must be at most $21,474,836.47.');return;}
+    setPending(true);setBidError('');
+    try {await fetchJson(`/api/auctions/${encodeURIComponent(slug)}/bids`,z.object({accepted:z.boolean()}),{method:'POST',headers:{'content-type':'application/json','x-demo-user-id':String(activeUser.id)},body:JSON.stringify({amountCents})});setBidValue('');}
+    catch(error){setBidError(error instanceof Error?error.message:'Unable to place bid.');}
+    finally{setPending(false);setRefresh(value=>value+1);}
+  }
   useEffect(() => {
     let live = true;
     fetchJson(`/api/auctions/${encodeURIComponent(slug)}`, detailSchema).then(result => {
-      if (live) { setItem(result.auction); setBids(result.bids); setOffset(Date.parse(result.serverTime) - Date.now()); }
+      if (live) { setError(''); setItem(result.auction); setBids(result.bids); setOffset(Date.parse(result.serverTime) - Date.now()); }
     }).catch((error: unknown) => { if (live) setError(error instanceof Error ? error.message : 'Unable to load auction.'); });
+    const poll = window.setInterval(()=>setRefresh(value=>value+1),5000);
     const timer = window.setInterval(() => setNow(Date.now()),1000);
-    return () => { live = false; clearInterval(timer); };
-  }, [slug]);
+    return () => { live = false; clearInterval(timer); clearInterval(poll); };
+  }, [slug, refresh]);
   useEffect(() => { if (item) document.title = `${item.title} · Auction House`; }, [item]);
   if (error) return <main className="container empty-state"><Message>{error}</Message><a href="/search">Browse auctions</a></main>;
   if (!item) return <main className="container empty-state">Loading auction…</main>;
@@ -66,7 +83,14 @@ function ItemPage({ slug }: { slug: string }) {
           <div className="bidder"><span>{ended ? 'Winner' : 'Current bidder'}</span><strong>{item.currentBidder?.name ?? 'No bids'}</strong></div>
           <div className="ending"><span>Status</span><strong>{ended ? 'Ended' : timeLeft(item.closesAt)}</strong></div>
           <p>Closes <time dateTime={item.closesAt}>{new Date(item.closesAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time> (your local time)</p>
-          <p className="availability-note">{ended ? 'This auction has ended.' : 'Bidding is not available yet.'}</p>
+          <form className="listing-form" onSubmit={placeBid}>
+            <label htmlFor="bid-amount">Your bid (USD)</label>
+            <input id="bid-amount" inputMode="decimal" value={bidValue} onChange={event=>setBidValue(event.target.value)} disabled={pending || ended || !activeUser || activeUser.id===item.seller.id} />
+            <p>Minimum bid: {formatCurrency(item.currentAmountCents+100)}</p>
+            {ended ? <p>This auction has ended.</p> : activeUser?.id===item.seller.id ? <p>You cannot bid on your own auction.</p> : null}
+            {bidError && <p role="alert" className="error-message">{bidError}</p>}
+            <button className="primary-button" disabled={pending || ended || !activeUser || activeUser.id===item.seller.id}>{pending?'Submitting…':'Place bid'}</button>
+          </form>
         </div>
         <div className="seller-card"><span className="seller-avatar">{item.seller.name.charAt(0)}</span><div><small>Sold by</small><strong>{item.seller.name}</strong><span>{item.location}</span></div></div>
       </section>
@@ -75,37 +99,6 @@ function ItemPage({ slug }: { slug: string }) {
       {item.specs.length > 0 && <section className="spec-list"><p className="eyebrow">Specifications</p>{item.specs.map(([label,value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</section>}
     </div>
     <section className="history-section"><p className="eyebrow">Auction activity</p><h2>Bid history</h2>{!bids.length ? <p>No bids yet.</p> : <div className="table-scroll"><table><thead><tr><th>Bidder</th><th>Amount</th><th>Time (local)</th></tr></thead><tbody>{bids.map(bid => <tr key={bid.id}><td>{bid.bidder.name}</td><td>{formatCurrency(bid.amountCents)}</td><td><time dateTime={bid.createdAt}>{new Date(bid.createdAt).toLocaleString()}</time></td></tr>)}</tbody></table></div>}</section>
-  </main>;
-}
-function NewAuctionPage({ activeUser }: { activeUser: DemoUser | undefined }) {
-  const [error, setError] = useState('');
-  const [pending, setPending] = useState(false);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError('');
-    if (!activeUser) { setError('Select a demo user before posting.'); return; }
-    const form = new FormData(event.currentTarget);
-    const price = String(form.get('price'));
-    if (!/^\d+(\.\d{1,2})?$/.test(price)) { setError('Enter a USD starting price with at most two decimal places.'); return; }
-    const date = new Date(String(form.get('closesAt')));
-    if (!Number.isFinite(date.getTime())) { setError('Choose a valid future closing time.'); return; }
-    const parsed = createAuctionSchema.safeParse({ title: form.get('title'), category: form.get('category'), description: form.get('description'), condition: form.get('condition'), location: form.get('location'), startingPriceCents: Math.round(Number(price)*100), closesAt: date.toISOString() });
-    if (!parsed.success) { setError(parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(' ')); return; }
-    setPending(true);
-    try {
-      const result = await fetchJson('/api/auctions', z.object({ slug: z.string() }), { method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-user-id': String(activeUser.id) }, body: JSON.stringify(parsed.data) });
-      location.assign(`/items/${result.slug}`);
-    } catch (error) { setError(error instanceof Error ? error.message : 'Unable to post auction.'); setPending(false); }
-  }
-  return <main className="container sell-page"><div className="breadcrumbs"><a href="/">Home</a><span>/</span><span>Sell</span></div><p className="eyebrow">Give your equipment a second life</p><h1>Post an auction</h1><p>Publish immediately as <strong>{activeUser?.name ?? '…'}</strong>. Change your demo user in the footer.</p>
-    <form className="listing-form" onSubmit={submit}>
-      <label>Title<input name="title" required maxLength={120} placeholder="What are you selling?" /></label>
-      <div className="form-columns"><label>Category<select name="category" required>{categories.map(c => <option key={c}>{c}</option>)}</select></label><label>Condition<select name="condition" required>{conditions.map(c => <option key={c}>{c}</option>)}</select></label></div>
-      <label>Description<textarea name="description" required maxLength={5000} rows={5} /></label>
-      <label>Location<input name="location" required maxLength={120} placeholder="City, state or region" /></label>
-      <div className="form-columns"><label>Starting price (USD)<input name="price" type="number" required min="0.01" max="1000000" step="0.01" placeholder="100.00" /></label><label>Closing time (your local time)<input name="closesAt" type="datetime-local" required /></label></div>
-      <p>Category illustration included. Your auction becomes visible as soon as you publish.</p>
-      {error && <Message>{error}</Message>}<button className="primary-button" type="submit" disabled={pending || !activeUser}>{pending ? 'Publishing…' : 'Publish auction'}</button>
-    </form>
   </main>;
 }
 function HealthPage() {
@@ -132,7 +125,7 @@ export function App() {
   const path = location.pathname;
   let page;
   if (path === '/auctions/new') page = <NewAuctionPage activeUser={activeUser} />;
-  else if (path.startsWith('/items/')) page = <ItemPage slug={path.slice('/items/'.length)} />;
+  else if (path.startsWith('/items/')) page = <ItemPage activeUser={activeUser} slug={path.slice('/items/'.length)} />;
   else if (path === '/health') page = <HealthPage />;
   else if (path === '/' || path === '/search') page = <CatalogPage home={path === '/'} />;
   else page = <main className="container empty-state"><h1>Page not found</h1><a href="/">Home</a></main>;
