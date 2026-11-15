@@ -25,7 +25,7 @@ const auctionSelect = `SELECT a.slug, a.title, a.category, a.description, a.cond
   LEFT JOIN demo_users bu ON bu.id=top_bid.bidder_id`;
 
 export function buildApp() {
-  const app = Fastify({ logger: true, requestIdHeader: 'x-request-id', bodyLimit: 32_768 });
+  const app = Fastify({ logger: true, requestIdHeader: 'x-request-id', bodyLimit: 32_768, routerOptions: { maxParamLength: 180 } });
   const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 1000 });
   app.addHook('onRequest', async (request, reply) => { reply.header('x-request-id', request.id); });
   app.get('/api/health', async (request, reply) => {

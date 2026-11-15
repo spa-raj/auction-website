@@ -31,7 +31,7 @@ function auctionAt(auction: AuctionRow, now: Date): Auction {
 }
 
 export function buildApp({ clock = () => new Date() }: { clock?: Clock } = {}) {
-  const app = Fastify({ logger: true, requestIdHeader: 'x-request-id', bodyLimit: 32_768 });
+  const app = Fastify({ logger: true, requestIdHeader: 'x-request-id', bodyLimit: 32_768, routerOptions: { maxParamLength: 180 } });
   const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 1000 });
   app.addHook('onRequest', async (request, reply) => { reply.header('x-request-id', request.id); });
   app.get('/api/health', async (request, reply) => {

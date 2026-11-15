@@ -89,6 +89,20 @@ describe('persisted auction browsing and posting', () => {
       expect(detail.auction.title).toBe(title);
     }
   });
+  it.each([64, 120])('opens and accepts bids on a listing with a %i-character title', async length => {
+    const response = await post({ ...listing(), title: 'x'.repeat(length) });
+    expect(response.statusCode).toBe(201);
+    const { slug } = response.json<{ slug: string }>();
+    expect(slug.length).toBeGreaterThan(100);
+    const detail = detailSchema.parse((await app.inject(`/api/auctions/${slug}`)).json());
+    expect(detail.auction.title).toBe('x'.repeat(length));
+    const accepted = await app.inject({ method: 'POST', url: `/api/auctions/${slug}/bids`,
+      headers: { 'x-demo-user-id': '3' }, payload: { amountCents: 12445 } });
+    expect(accepted.statusCode).toBe(201);
+    const updated = detailSchema.parse((await app.inject(`/api/auctions/${slug}`)).json());
+    expect(updated.auction.bidCount).toBe(1);
+    expect(updated.bids[0].amountCents).toBe(12445);
+  });
   it('searches literal text and filters and sorts alongside additional saved listings', async () => {
     const token = randomUUID();
     const fixtureSlugs: string[] = [];

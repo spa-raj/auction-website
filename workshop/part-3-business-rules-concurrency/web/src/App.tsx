@@ -17,6 +17,19 @@ function CatalogPage({ home }: { home: boolean }) {
   const [items, setItems] = useState<Auction[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(Date.now());
+  const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('focus', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('focus', tick);
+    };
+  }, []);
   const query = params.get('q') ?? '';
   useEffect(() => {
     const controller = new AbortController();
@@ -24,7 +37,7 @@ function CatalogPage({ home }: { home: boolean }) {
     if (category) filter.set('category',category);
     setLoading(true); setError('');
     fetchJson(`/api/auctions?${filter}`, listSchema, { signal: controller.signal })
-      .then(result => { setItems(result.auctions); setLoading(false); })
+      .then(result => { if (!controller.signal.aborted) { setItems(result.auctions); setOffset(Date.parse(result.serverTime) - Date.now()); setNow(Date.now()); setLoading(false); } })
       .catch((error: unknown) => { if (!controller.signal.aborted) { setError(error instanceof Error ? error.message : 'Unable to load auctions.'); setLoading(false); } });
     return () => controller.abort();
   }, [query, sort, category]);
@@ -37,7 +50,7 @@ function CatalogPage({ home }: { home: boolean }) {
       </div>
       {error && <Message>{error}</Message>}
       {!loading && !error && !items.length && <div className="empty-state"><h2>No equipment found</h2><p>Try a broader search or another category.</p><a href="/search">View all auctions</a></div>}
-      {!loading && !error && <div className="product-grid search-results">{items.map(item => <ProductCard key={item.slug} item={item} />)}</div>}
+      {!loading && !error && <div className="product-grid search-results">{items.map(item => <ProductCard key={item.slug} item={item} now={now + offset} />)}</div>}
     </main>
   </>;
 }
@@ -76,10 +89,22 @@ function ItemPage({ slug, activeUser }: { slug: string; activeUser: DemoUser | u
   }
   useEffect(() => {
     let live = true;
-    fetchJson(`/api/auctions/${encodeURIComponent(slug)}`, detailSchema).then(result => {
-      if (live) { setError(''); setItem(result.auction); setBids(result.bids); setOffset(Date.parse(result.serverTime) - Date.now()); setNow(Date.now()); }
-    }).catch((error: unknown) => { if (live) setError(error instanceof Error ? error.message : 'Unable to load auction.'); });
-    return () => { live = false; };
+    let inFlight = false;
+    const controller = new AbortController();
+    async function load() {
+      // Keep slow responses eligible and avoid overlapping polling requests.
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const result = await fetchJson(`/api/auctions/${encodeURIComponent(slug)}`, detailSchema, { signal: controller.signal });
+        if (live) { setError(''); setItem(result.auction); setBids(result.bids); setOffset(Date.parse(result.serverTime) - Date.now()); setNow(Date.now()); }
+      } catch (error) {
+        if (live) setError(error instanceof Error ? error.message : 'Unable to load auction.');
+      } finally { inFlight = false; }
+    }
+    void load();
+    const poll = window.setInterval(() => void load(), 5000);
+    return () => { live = false; controller.abort(); clearInterval(poll); };
   }, [slug, refresh]);
   useEffect(() => {
     const recheck = () => {
@@ -89,12 +114,11 @@ function ItemPage({ slug, activeUser }: { slug: string; activeUser: DemoUser | u
       setNow(Date.now());
       setRefresh(value => value + 1);
     };
-    const poll = window.setInterval(() => setRefresh(value => value + 1), 5000);
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     document.addEventListener('visibilitychange', recheck);
     window.addEventListener('focus', recheck);
     return () => {
-      clearInterval(timer); clearInterval(poll);
+      clearInterval(timer);
       document.removeEventListener('visibilitychange', recheck);
       window.removeEventListener('focus', recheck);
     };
