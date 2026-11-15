@@ -1,0 +1,3 @@
+# Use selected demo users without authentication
+
+Part 2 uses ten seeded demo users and a footer switcher, with an initial user randomly selected per browser tab and remembered in sessionStorage across navigation and reloads, rather than introducing account registration and authentication. This supersedes browser-wide localStorage selection; the footer switcher changes the current tab, and the header shows its active user. Seller and bidder attribution follows the selected user; this identity is not proof of who is using the application, and authenticated ownership checks would require revisiting this boundary.

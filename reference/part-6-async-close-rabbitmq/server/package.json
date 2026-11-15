@@ -7,7 +7,7 @@
     "dev:close-worker": "tsx watch --exclude '../node_modules/**' src/close-worker.ts",
     "dev:notification-worker": "tsx watch --exclude '../node_modules/**' src/notification-worker.ts",
     "migrate": "tsx src/migrate.ts",
-    "test": "vitest run"
+    "test": "vitest run --no-file-parallelism"
   },
   "dependencies": {
     "@opentelemetry/auto-instrumentations-node": "^0.83.1",
