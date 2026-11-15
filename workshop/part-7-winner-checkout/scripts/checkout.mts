@@ -45,7 +45,7 @@ async function dismissFixtureNotices(slugs: string[]) {
     }
   }
 }
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await chromium.launch({ channel: 'chrome', chromiumSandbox: true, headless: true });
 try {
   const slug = await create('sold', 8);
   const noBid = await create('no-bids');

@@ -6,8 +6,12 @@ Copy Part 6 and isolate runtime resources. At authoritative sold finalization, c
 
 Test eligibility, tampering, raw-body signatures, replay and mismatches, concurrent requests, decline, cancel, retry and restart recovery. Preserve Part 6 tests, run build/health/browser checks. Run a headed tiled bidding war with windows held open and the winner's purchase left unpaid; provide a separate unpaid decline example. Stop for user browser review before any further slice.
 
-## Slice 2 — Purchase overview (proposal only; not approved)
+## Slice 2 — Seller payment status and recovery (approved)
 
-Provide a dedicated participant purchase view so winners can find their outstanding and paid purchases without locating each auction manually. Each row links to authoritative auction detail and its checkout/status, including recovery after reload and identity switching. Keep seller visibility on auction detail. Validate browser navigation, status consistency and identity isolation. Confirm this proposed scope after Slice 1 review before implementation.
+The latest instruction reviews Slice 1 and approves seller payment status and recovery, superseding the earlier optional purchase-overview proposal. No purchase-overview screen is included.
 
-All payment correctness and recovery required by Slice 1 are completed in Slice 1. Slice 2 is an optional discoverability increment.
+Show authoritative unpaid/paid state to the seller and winner, with explicit pending-confirmation, missing-checkout and provider-unavailable feedback. Recover via initial/reload/focus/visibility/five-second reads and an explicit refresh control. Keep status-fetch failures separate from checkout-action errors. Only the winner can create or restart checkout. Seller summaries omit purchase UUIDs, session IDs/URLs and event details; public auctions never expose payment state.
+
+For a still-unpaid purchase, look up its bound session before creating/reusing checkout. Only a definite provider 404 permits rebinding a new session, retaining purchase identity, recorded amount and server-owned return URLs. A timeout, 5xx, malformed/mismatched response or existing paid/complete provider session must not open a replacement payment path. Completed sessions await the durable signed webhook; paid purchases remain terminal. Serialize concurrent recovery with the purchase lock; reject old-session webhooks after replacement.
+
+Test missing-session recovery (including concurrent requests and paid/pending safeguards), failures, role projections and browser behavior across seller/winner/loser views. Document important verification commands, including the headed bidding war, in AGENTS.md. Run relevant tests, build, health and browser checks, then stop for Slice 2 browser review.

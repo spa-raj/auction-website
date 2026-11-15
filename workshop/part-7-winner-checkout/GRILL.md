@@ -1,6 +1,6 @@
 # Winner Checkout — Design Interview
 
-Status: all Round 1 recommendations accepted; Slice 1 explicitly approved and implemented. All checks and the headed browser handoff passed; stopped for Slice 1 browser review. Slice 2 is not approved.
+Status: Round 1 recommendations accepted; Slice 1 reviewed. Slice 2 seller payment status and recovery is explicitly approved by the latest user instruction; all automated and headed browser checks passed; stopped for Slice 2 browser review. The optional purchase-overview proposal is superseded.
 
 ## Fixed requirements
 
@@ -76,3 +76,16 @@ flowchart LR
   Stripe -->|"Signed completion; durable retries"| API
   Stripe --> Store["Durable mock state · local file"]
 ```
+
+
+## Slice 2 — Accepted scope and recovery decisions
+
+The user reviewed Slice 1 and authorized seller payment status and recovery, explicitly including an unpaid mock session disappearing. This replaces the earlier optional purchase-overview proposal. No extra interview or approval is required for this scope.
+
+- Both seller and winner see authoritative status and recovery guidance. Seller responses omit purchase UUIDs, session links/IDs and webhook details. Public auction responses and other participants receive no payment state. Only the winner may create/restart checkout.
+- Preserve initial/reload/focus/visibility/five-second reconciliation and add an explicit refresh control. Keep failed status reads visibly stale without erasing the last known status or checkout-action failures.
+- For a bound, unpaid purchase, look up the provider session. Only an explicit 404 permits replacement, retaining purchase identity, recorded amount and fixed server-owned return URLs. Serialize concurrent replacement; reject retired-session completion events.
+- Provider timeout/5xx, invalid/mismatched data and inconsistent status are unavailable states, not evidence that a session disappeared.
+- Provider-completed/paid sessions show confirmation pending and suppress further payment. Existing durable webhook retries confirm automatically. Only a verified matching signed completion event marks the application paid. Recorded paid purchases never reopen, regardless of provider availability.
+- Recovery tests use disposable mock state, never destructive edits to live payment evidence. Important commands, including the headed bidding war, are documented in AGENTS.md.
+- Stop after complete automated/browser verification for Slice 2 review.
