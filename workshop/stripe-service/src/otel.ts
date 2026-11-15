@@ -6,7 +6,7 @@ import {
   SamplingDecision,
   type Sampler,
   type SamplingResult,
-} from '@opentelemetry/sdk-trace-base';
+} from '@opentelemetry/sdk-trace';
 
 class StripeRootSampler implements Sampler {
   shouldSample(

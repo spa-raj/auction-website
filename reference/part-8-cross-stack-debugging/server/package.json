@@ -8,7 +8,7 @@
     "dev:notification-worker": "tsx watch --exclude '../node_modules/**' src/notification-worker.ts",
     "migrate": "tsx src/migrate.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --no-file-parallelism"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -33,6 +33,6 @@
     "socket.io-client": "^4.8.3",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.12"
+    "vitest": "^5.1.0"
   }
 }
