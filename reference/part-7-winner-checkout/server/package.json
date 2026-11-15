@@ -17,11 +17,11 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "@socket.io/redis-emitter": "^5.1.0",
     "amqplib": "^2.0.1",
-    "fastify": "^5.12.6",
+    "fastify": "^5.12.8",
     "pg": "^8.16.3",
     "redis": "^6.2.1",
     "socket.io": "^4.8.3",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.8",
