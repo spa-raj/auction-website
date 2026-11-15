@@ -7,6 +7,9 @@ and adds exactly one slice.
 **Stack:** TypeScript + ESM, React + Vite, Fastify, Zod, PostgreSQL, Redis + Socket.IO,
 RabbitMQ worker, OpenTelemetry + Jaeger, Docker Compose (infra in Docker, apps on host).
 
+Data-access guidance: [ORM safety recommendation](docs/orm-safety-recommendation.md)
+— repository-wide findings and recommendation for issue #9.
+
 ## The parts
 
 | Folder | Slice |

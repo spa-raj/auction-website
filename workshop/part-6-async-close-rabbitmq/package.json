@@ -1,0 +1,33 @@
+{
+  "name": "auction-house",
+  "private": true,
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "db:up": "../scripts/workshop-db up auction_part_6",
+    "db:down": "../scripts/workshop-db drop auction_part_6",
+    "db:reset": "npm run db:down && npm run db:up && npm run migrate",
+    "migrate": "DATABASE_URL=postgres://auction:auction@localhost:55432/auction_part_6 npm run migrate --workspace server",
+    "dev": "API_PORT=3106 WEB_PORT=5106 DATABASE_URL=postgres://auction:auction@localhost:55432/auction_part_6 concurrently -k -n server,web,close,notifications \"npm run dev --workspace server\" \"npm run dev --workspace web\" \"npm run worker:close --workspace server\" \"npm run worker:notifications --workspace server\"",
+    "start": "npm run db:up && npm run redis:up && npm run rabbitmq:up && npm run migrate && npm run dev",
+    "test": "npm run test:db:up && npm run rabbitmq:setup && DATABASE_URL=postgres://auction:auction@localhost:55432/auction_part_6_test npm run migrate --workspace server && DATABASE_URL=postgres://auction:auction@localhost:55432/auction_part_6_test RABBITMQ_URL=amqp://auction:auction@127.0.0.1:56726/auction_part_6_test REDIS_CHANNEL_PREFIX=auction-part-6-test:socket.io npm run test --workspace server && npm run test --workspace web",
+    "typecheck": "tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
+    "build": "npm run typecheck && npm run build --workspace web",
+    "test:bidding-war": "tsx scripts/bidding-war.mts",
+    "test:closing-time": "tsx scripts/closing-time.mts",
+    "redis:up": "docker compose -f ../docker-compose.yml up -d --wait redis",
+    "test:realtime": "tsx scripts/realtime.mts",
+    "worker:close": "npm run worker:close --workspace server",
+    "test:db:up": "tsx scripts/test-db.mts",
+    "rabbitmq:setup": "tsx scripts/rabbitmq-setup.mts",
+    "rabbitmq:up": "docker compose -f ../docker-compose.yml up -d --wait rabbitmq && npm run rabbitmq:setup",
+    "worker:notifications": "npm run worker:notifications --workspace server",
+    "test:notifications": "tsx scripts/notifications.mts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "playwright": "^1.65.1"
+  }
+}
